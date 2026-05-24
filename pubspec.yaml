@@ -1,0 +1,50 @@
+name: agniraksha_mobile
+description: "AgniRakhsa — Industrial Fire & Gas Monitoring Mobile App"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+
+  # Networking
+  dio: ^5.7.0
+  web_socket_channel: ^3.0.1
+
+  # Routing
+  go_router: ^14.6.2
+
+  # Secure Storage
+  flutter_secure_storage: ^9.2.4
+
+  # Charts
+  fl_chart: ^0.70.2
+
+  # Notifications
+  flutter_local_notifications: ^18.0.1
+
+  # JSON Serialization
+  json_annotation: ^4.9.0
+
+  # Typography
+  google_fonts: ^6.2.1
+
+  # Utilities
+  intl: ^0.20.2
+  connectivity_plus: ^6.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  json_serializable: ^6.9.4
+  build_runner: ^2.4.15
+
+flutter:
+  uses-material-design: true
