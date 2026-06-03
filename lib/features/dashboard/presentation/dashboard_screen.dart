@@ -5,6 +5,8 @@ import 'package:agniraksha_mobile/features/auth/providers/auth_provider.dart';
 import 'package:agniraksha_mobile/core/theme/app_colors.dart';
 import 'package:agniraksha_mobile/core/theme/app_typography.dart';
 import 'package:agniraksha_mobile/core/notifications/notification_service.dart';
+import 'package:agniraksha_mobile/core/alarm/alarm_service.dart';
+import 'package:agniraksha_mobile/features/alerts/presentation/fire_alert_overlay.dart';
 import 'package:agniraksha_mobile/features/realtime/providers/realtime_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -26,7 +28,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen to real-time fire and gas alert stream to trigger local notifications
+    // Listen to real-time fire and gas alert stream
+    // Triggers: 1) Loud siren + vibration  2) Full-screen overlay  3) Local notification (fallback)
     ref.listen<AsyncValue<Map<String, dynamic>>>(realtimeEventsProvider, (previous, next) {
       next.whenData((message) {
         if (message['type'] == 'FIRE_ALERT') {
@@ -34,9 +37,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           if (alertData != null) {
             final roomName = alertData['room_name'] ?? 'Unknown Room';
             final riskLevel = alertData['risk_level'] ?? 'HIGH';
+            final severity = alertData['severity'] as String? ?? 'high';
             final score = (alertData['fusion_score'] as num?)?.toDouble() ?? 0.0;
             final sensorSummary = alertData['sensor_summary'] ?? '';
 
+            // 1) Start loud siren + continuous vibration
+            ref.read(alarmServiceProvider).startAlarm(severity: severity);
+
+            // 2) Show full-screen fire alert overlay (must interact to dismiss)
+            if (mounted) {
+              FireAlertOverlay.show(context, alertData);
+            }
+
+            // 3) Local notification as fallback (for when app is backgrounded)
             ref.read(notificationServiceProvider).showFireAlert(
               title: '🚨 FIRE ALERT: $roomName',
               body: 'Severity: ${riskLevel.toString().toUpperCase()} (${(score * 100).toStringAsFixed(0)}%)\n$sensorSummary',

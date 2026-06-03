@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:agniraksha_mobile/features/rooms/providers/rooms_provider.dart';
 import 'package:agniraksha_mobile/features/rooms/domain/room_model.dart';
+import 'package:agniraksha_mobile/features/alerts/providers/alerts_provider.dart';
+import 'package:agniraksha_mobile/features/alerts/domain/alert_model.dart';
+import 'package:agniraksha_mobile/features/alerts/presentation/alert_detail_sheet.dart';
 import 'package:agniraksha_mobile/core/theme/app_colors.dart';
 import 'package:agniraksha_mobile/core/theme/app_typography.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 
 class RoomDetailScreen extends ConsumerStatefulWidget {
   final String roomId;
@@ -43,6 +47,12 @@ class _RoomDetailScreenState extends ConsumerState<RoomDetailScreen> {
                 // ── Room Status Header ──
                 _RoomHeader(room: room),
                 const SizedBox(height: 20),
+
+                // ── Active Alerts for this Room ──
+                _ActiveAlertsSection(roomId: widget.roomId),
+
+                // ── Quick Actions ──
+                _QuickActionsSection(roomId: widget.roomId, roomName: room.name),
 
                 // ── Device Status Chips ──
                 if (room.devices.isNotEmpty) ...[
@@ -108,7 +118,10 @@ class _RoomDetailScreenState extends ConsumerState<RoomDetailScreen> {
                         childAspectRatio: 1.4,
                       ),
                       itemCount: sensors.length,
-                      itemBuilder: (context, i) => _SensorTile(sensor: sensors[i]),
+                      itemBuilder: (context, i) => _SensorTile(
+                        sensor: sensors[i],
+                        onTap: () => _showSensorDialog(context, sensors[i]),
+                      ),
                     );
                   },
                 ),
@@ -130,6 +143,121 @@ class _RoomDetailScreenState extends ConsumerState<RoomDetailScreen> {
         ),
       ),
     );
+  }
+
+  void _showSensorDialog(BuildContext context, SensorModel sensor) {
+    final typeLabel = _sensorDisplayLabel(sensor.sensorType);
+    final unit = _sensorDisplayUnit(sensor.sensorType);
+    final value = sensor.currentValue;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _sensorColor(sensor.sensorType),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              typeLabel,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _infoRow('Type', sensor.sensorType.toUpperCase()),
+            _infoRow('Value', value != null ? '${value.toStringAsFixed(2)} $unit' : 'No data'),
+            _infoRow('Status', sensor.status.toUpperCase()),
+            _infoRow('Device', sensor.deviceId.substring(0, 8)),
+            if (sensor.lastUpdate != null) _infoRow('Updated', _formatTime(sensor.lastUpdate!)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('CLOSE', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          Text(
+            value,
+            style: AppTypography.monoSmall.copyWith(color: AppColors.textPrimary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _sensorDisplayLabel(String type) {
+    switch (type.toUpperCase()) {
+      case 'MQ2':        return 'MQ-2 (Smoke/LPG)';
+      case 'MQ4':        return 'MQ-4 (Methane)';
+      case 'MQ6':        return 'MQ-6 (LPG)';
+      case 'MQ9':        return 'MQ-9 (CO)';
+      case 'SHTC3_TEMP': return 'Temperature';
+      case 'SHTC3_HUM':  return 'Humidity';
+      case 'FLAME':      return 'Flame Sensor';
+      default:           return type;
+    }
+  }
+
+  String _sensorDisplayUnit(String type) {
+    switch (type.toUpperCase()) {
+      case 'SHTC3_TEMP': return '°C';
+      case 'SHTC3_HUM':  return '%';
+      case 'FLAME':      return '';
+      default:           return 'ppm';
+    }
+  }
+
+  Color _sensorColor(String type) {
+    switch (type.toUpperCase()) {
+      case 'MQ2':        return AppColors.sensorMQ2;
+      case 'MQ4':        return AppColors.sensorMQ4;
+      case 'MQ6':        return AppColors.sensorMQ6;
+      case 'MQ9':        return AppColors.sensorMQ9;
+      case 'SHTC3_TEMP': return AppColors.sensorTemp;
+      case 'SHTC3_HUM':  return AppColors.sensorHum;
+      case 'FLAME':      return AppColors.sensorFlam;
+      default:           return AppColors.textSecondary;
+    }
+  }
+
+  String _formatTime(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      return '${diff.inHours}h ago';
+    } catch (_) {
+      return iso;
+    }
   }
 }
 
@@ -279,7 +407,8 @@ class _DeviceChip extends StatelessWidget {
 // ── Sensor Tile ─────────────────────────────────────────────
 class _SensorTile extends StatelessWidget {
   final SensorModel sensor;
-  const _SensorTile({required this.sensor});
+  final VoidCallback? onTap;
+  const _SensorTile({required this.sensor, this.onTap});
 
   Color get _typeColor {
     switch (sensor.sensorType.toUpperCase()) {
@@ -321,7 +450,9 @@ class _SensorTile extends StatelessWidget {
     final value = sensor.currentValue;
     final displayValue = value != null ? value.toStringAsFixed(1) : '--';
 
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surface1,
@@ -373,6 +504,7 @@ class _SensorTile extends StatelessWidget {
             ],
           ),
         ],
+      ),
       ),
     );
   }
@@ -753,3 +885,238 @@ class _SensorHistoryChartState extends ConsumerState<SensorHistoryChart> {
   }
 }
 
+
+// ── Active Alerts Section ──────────────────────────────────
+class _ActiveAlertsSection extends ConsumerWidget {
+  final String roomId;
+  const _ActiveAlertsSection({required this.roomId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final alertsState = ref.watch(alertsProvider);
+
+    // Filter alerts for this room
+    final roomAlerts = alertsState.items
+        .where((a) => a.roomId == roomId && !a.isAcknowledged)
+        .toList();
+
+    if (roomAlerts.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.critical,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'ACTIVE ALERTS (${roomAlerts.length})',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: AppColors.critical,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...roomAlerts.map((alert) => _RoomAlertTile(
+          alert: alert,
+          onAcknowledge: () {
+            ref.read(alertsProvider.notifier).acknowledge(alert.id);
+          },
+          onTap: () {
+            AlertDetailSheet.show(context, alert: alert);
+          },
+        )),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+}
+
+class _RoomAlertTile extends StatelessWidget {
+  final AlertModel alert;
+  final VoidCallback onAcknowledge;
+  final VoidCallback onTap;
+
+  const _RoomAlertTile({
+    required this.alert,
+    required this.onAcknowledge,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.critical.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.critical.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, size: 20, color: AppColors.critical),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    alert.message ?? alert.alertType ?? 'Alert',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    (alert.severity ?? 'warning').toUpperCase(),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.critical,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 9,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 30,
+              child: TextButton(
+                onPressed: onAcknowledge,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  backgroundColor: AppColors.safe.withValues(alpha: 0.1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                child: Text(
+                  'ACK',
+                  style: TextStyle(
+                    color: AppColors.safe,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Quick Actions Section ──────────────────────────────────
+class _QuickActionsSection extends StatelessWidget {
+  final String roomId;
+  final String roomName;
+
+  const _QuickActionsSection({
+    required this.roomId,
+    required this.roomName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'QUICK ACTIONS',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: AppColors.textMuted,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _ActionButton(
+                icon: Icons.notifications_active_outlined,
+                label: 'View Alerts',
+                color: AppColors.warning,
+                onTap: () => context.push('/alerts'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _ActionButton(
+                icon: Icons.history_rounded,
+                label: 'History',
+                color: AppColors.info,
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Sensor history is shown in the chart below'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 22, color: color),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

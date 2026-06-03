@@ -39,10 +39,24 @@ class AuthRepository {
     String? jwt;
     if (cookies != null) {
       for (final cookie in cookies) {
-        if (cookie.startsWith('access_token=Bearer%20') || cookie.startsWith('access_token=Bearer ')) {
-          final tokenPart = cookie.split(';').first;
-          final value = tokenPart.split('=').sublist(1).join('=');
-          jwt = value.replaceFirst('Bearer%20', '').replaceFirst('Bearer ', '');
+        final trimmed = cookie.trim();
+        if (trimmed.startsWith('access_token=')) {
+          final tokenPart = trimmed.split(';').first;
+          var value = tokenPart.substring('access_token='.length).trim();
+          
+          // Remove enclosing double quotes if present (Starlette/FastAPI quotes values with spaces)
+          if (value.startsWith('"') && value.endsWith('"')) {
+            value = value.substring(1, value.length - 1);
+          }
+          
+          final decodedValue = Uri.decodeComponent(value);
+          if (decodedValue.startsWith('Bearer ')) {
+            jwt = decodedValue.substring('Bearer '.length);
+          } else if (decodedValue.startsWith('Bearer%20')) {
+            jwt = decodedValue.substring('Bearer%20'.length);
+          } else {
+            jwt = decodedValue;
+          }
           break;
         }
       }

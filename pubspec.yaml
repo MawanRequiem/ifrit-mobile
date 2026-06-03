@@ -35,6 +35,11 @@ dependencies:
   # Typography
   google_fonts: ^6.2.1
 
+  # Alarm & Haptics
+  audioplayers: ^6.4.0
+  vibration: ^2.0.0
+  wakelock_plus: ^1.2.8
+
   # Utilities
   intl: ^0.20.2
   connectivity_plus: ^6.1.1
