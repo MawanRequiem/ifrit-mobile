@@ -72,6 +72,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> register(String email, String password) async {
+    state = state.copyWith(status: AuthStatus.loading, error: null);
+    try {
+      final user = await _repo.register(email, password);
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+    } catch (e) {
+      state = AuthState(
+        status: AuthStatus.unauthenticated,
+        error: e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
+  }
+
   Future<void> logout() async {
     await _repo.logout();
     state = const AuthState(status: AuthStatus.unauthenticated);

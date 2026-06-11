@@ -5,19 +5,21 @@ import 'package:agniraksha_mobile/features/auth/providers/auth_provider.dart';
 import 'package:agniraksha_mobile/core/theme/app_colors.dart';
 import 'package:agniraksha_mobile/core/theme/app_typography.dart';
 
-class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends ConsumerStatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen>
+class _RegisterScreenState extends ConsumerState<RegisterScreen>
     with SingleTickerProviderStateMixin {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeIn;
 
@@ -36,13 +38,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _fadeCtrl.dispose();
     super.dispose();
   }
 
+  PasswordStrength _calculateStrength(String password) {
+    if (password.isEmpty) return PasswordStrength.none;
+    int score = 0;
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    if (RegExp(r'[A-Z]').hasMatch(password)) score++;
+    if (RegExp(r'[0-9]').hasMatch(password)) score++;
+    if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) score++;
+
+    if (score <= 2) return PasswordStrength.weak;
+    if (score <= 3) return PasswordStrength.medium;
+    return PasswordStrength.strong;
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    ref.read(authProvider.notifier).login(
+    ref.read(authProvider.notifier).register(
       _emailController.text.trim(),
       _passwordController.text,
     );
@@ -52,6 +69,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final isLoading = auth.status == AuthStatus.loading;
+    final strength = _calculateStrength(_passwordController.text);
 
     return Scaffold(
       body: Container(
@@ -113,12 +131,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Fire & Gas Monitoring System',
+                        'Create your account',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.textMuted,
                         ),
                       ),
-                      const SizedBox(height: 48),
+                      const SizedBox(height: 40),
 
                       // ── Email field ──
                       TextFormField(
@@ -163,8 +181,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       TextFormField(
                         controller: _passwordController,
                         obscureText: _obscurePassword,
-                        textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => _submit(),
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) => setState(() {}),
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: AppColors.textPrimary,
                         ),
@@ -204,6 +222,67 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         ),
                         validator: (v) {
                           if (v == null || v.isEmpty) return 'Password is required';
+                          if (v.length < 8) return 'Password must be at least 8 characters';
+                          if (!RegExp(r'[A-Z]').hasMatch(v)) return 'Password must contain at least 1 uppercase letter';
+                          if (!RegExp(r'[0-9]').hasMatch(v)) return 'Password must contain at least 1 number';
+                          return null;
+                        },
+                      ),
+
+                      // ── Password strength indicator ──
+                      if (_passwordController.text.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        _PasswordStrengthIndicator(strength: strength),
+                      ],
+
+                      const SizedBox(height: 16),
+
+                      // ── Confirm Password field ──
+                      TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: _obscureConfirmPassword,
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _submit(),
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Confirm Password',
+                          prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
+                          filled: true,
+                          fillColor: AppColors.surface2,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.border),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: AppColors.brand.withValues(alpha: 0.6), width: 1.5),
+                          ),
+                          errorBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.critical),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirmPassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              size: 20,
+                              color: AppColors.textMuted,
+                            ),
+                            onPressed: () =>
+                                setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Please confirm your password';
+                          if (v != _passwordController.text) return 'Passwords do not match';
                           return null;
                         },
                       ),
@@ -240,7 +319,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
                       const SizedBox(height: 32),
 
-                      // ── Login button ──
+                      // ── Register button ──
                       SizedBox(
                         height: 52,
                         child: ElevatedButton(
@@ -263,31 +342,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Text('Sign In', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                              : const Text('Create Account', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                         ),
                       ),
 
                       const SizedBox(height: 24),
 
-                      // ── Register link ──
+                      // ── Sign in link ──
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            "Don't have an account? ",
+                            'Already have an account? ',
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: AppColors.textMuted,
                             ),
                           ),
                           TextButton(
-                            onPressed: () => context.go('/register'),
+                            onPressed: () => context.go('/login'),
                             style: TextButton.styleFrom(
                               padding: EdgeInsets.zero,
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             child: Text(
-                              'Register',
+                              'Sign In',
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 color: AppColors.brand,
                                 fontWeight: FontWeight.w700,
@@ -315,6 +394,53 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           ),
         ),
       ),
+    );
+  }
+}
+
+enum PasswordStrength { none, weak, medium, strong }
+
+class _PasswordStrengthIndicator extends StatelessWidget {
+  final PasswordStrength strength;
+
+  const _PasswordStrengthIndicator({required this.strength});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (strength) {
+      PasswordStrength.none   => ('None',  AppColors.textMuted),
+      PasswordStrength.weak   => ('Weak',  AppColors.critical),
+      PasswordStrength.medium => ('Medium', AppColors.warning),
+      PasswordStrength.strong => ('Strong', AppColors.safe),
+    };
+
+    final segments = strength.index;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: List.generate(3, (i) {
+            return Expanded(
+              child: Container(
+                height: 4,
+                margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
+                decoration: BoxDecoration(
+                  color: i < segments ? color : AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Password strength: $label',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }

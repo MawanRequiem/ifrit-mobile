@@ -26,8 +26,10 @@ dependencies:
   # Charts
   fl_chart: ^0.70.2
 
-  # Notifications
+  # Notifications (Local + Push)
   flutter_local_notifications: ^18.0.1
+  firebase_core: ^3.6.0
+  firebase_messaging: ^15.1.0
 
   # JSON Serialization
   json_annotation: ^4.9.0
@@ -43,6 +45,7 @@ dependencies:
   # Utilities
   intl: ^0.20.2
   connectivity_plus: ^6.1.1
+  shared_preferences: ^2.3.0
 
 dev_dependencies:
   flutter_test:

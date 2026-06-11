@@ -14,6 +14,7 @@ class AlertsState {
   final int page;
   final bool isLoading;
   final String? severityFilter;
+  final String? searchQuery;
 
   const AlertsState({
     this.items = const [],
@@ -21,6 +22,7 @@ class AlertsState {
     this.page = 1,
     this.isLoading = false,
     this.severityFilter,
+    this.searchQuery,
   });
 
   AlertsState copyWith({
@@ -29,6 +31,7 @@ class AlertsState {
     int? page,
     bool? isLoading,
     String? severityFilter,
+    String? searchQuery,
   }) {
     return AlertsState(
       items: items ?? this.items,
@@ -36,6 +39,7 @@ class AlertsState {
       page: page ?? this.page,
       isLoading: isLoading ?? this.isLoading,
       severityFilter: severityFilter,
+      searchQuery: searchQuery,
     );
   }
 }
@@ -82,6 +86,10 @@ class AlertsNotifier extends StateNotifier<AlertsState> {
       items: state.items.where((a) => a.id != alertId).toList(),
       total: state.total - 1,
     );
+  }
+
+  void setSearchQuery(String? query) {
+    state = state.copyWith(searchQuery: query);
   }
 }
 

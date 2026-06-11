@@ -263,12 +263,21 @@ class _RoomDetailScreenState extends ConsumerState<RoomDetailScreen> {
 
 
 // ── Room Header ─────────────────────────────────────────────
-class _RoomHeader extends StatelessWidget {
+class _RoomHeader extends StatefulWidget {
   final RoomModel room;
   const _RoomHeader({required this.room});
 
+  @override
+  State<_RoomHeader> createState() => _RoomHeaderState();
+}
+
+class _RoomHeaderState extends State<_RoomHeader>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _glowCtrl;
+  late Animation<double> _glowAnimation;
+
   Color get _statusColor {
-    switch (room.status) {
+    switch (widget.room.status) {
       case 'safe':     return AppColors.safe;
       case 'low':      return AppColors.info;
       case 'medium':   return AppColors.warning;
@@ -279,71 +288,106 @@ class _RoomHeader extends StatelessWidget {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _glowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _glowAnimation = Tween<double>(begin: 0.4, end: 0.8).animate(
+      CurvedAnimation(parent: _glowCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _glowCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _statusColor.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _statusColor.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _statusColor,
-              boxShadow: [
-                BoxShadow(
-                  color: _statusColor.withValues(alpha: 0.5),
-                  blurRadius: 8,
-                  spreadRadius: 2,
-                ),
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _statusColor.withValues(alpha: 0.08),
+                _statusColor.withValues(alpha: 0.02),
               ],
             ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _statusColor.withValues(alpha: 0.25 * _glowAnimation.value + 0.1),
+            ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  room.name,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
+          child: Row(
+            children: [
+              // Animated status glow dot
+              Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _statusColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _statusColor.withValues(alpha: _glowAnimation.value * 0.7),
+                      blurRadius: 12,
+                      spreadRadius: 3,
+                    ),
+                  ],
                 ),
-                if (room.description != null && room.description!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      room.description!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.room.name,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: _statusColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              room.status.toUpperCase(),
-              style: AppTypography.monoSmall.copyWith(
-                color: _statusColor,
-                fontWeight: FontWeight.w700,
+                    if (widget.room.description != null && widget.room.description!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          widget.room.description!,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: _statusColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  widget.room.status.toUpperCase(),
+                  style: AppTypography.monoSmall.copyWith(
+                    color: _statusColor,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -366,21 +410,27 @@ class _DeviceChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
         color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 7,
-            height: 7,
+            width: 8,
+            height: 8,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: _statusColor,
+              boxShadow: [
+                BoxShadow(
+                  color: _statusColor.withValues(alpha: 0.4),
+                  blurRadius: 5,
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 8),
@@ -388,14 +438,24 @@ class _DeviceChip extends StatelessWidget {
             device.name ?? 'Node',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: 6),
-          Text(
-            device.status.toUpperCase(),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: _statusColor,
-              fontSize: 8,
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: _statusColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              device.status.toUpperCase(),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: _statusColor,
+                fontWeight: FontWeight.w700,
+                fontSize: 9,
+                letterSpacing: 0.4,
+              ),
             ),
           ),
         ],
@@ -405,13 +465,22 @@ class _DeviceChip extends StatelessWidget {
 }
 
 // ── Sensor Tile ─────────────────────────────────────────────
-class _SensorTile extends StatelessWidget {
+class _SensorTile extends StatefulWidget {
   final SensorModel sensor;
   final VoidCallback? onTap;
   const _SensorTile({required this.sensor, this.onTap});
 
+  @override
+  State<_SensorTile> createState() => _SensorTileState();
+}
+
+class _SensorTileState extends State<_SensorTile>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseCtrl;
+  late Animation<double> _pulseAnimation;
+
   Color get _typeColor {
-    switch (sensor.sensorType.toUpperCase()) {
+    switch (widget.sensor.sensorType.toUpperCase()) {
       case 'MQ2':        return AppColors.sensorMQ2;
       case 'MQ4':        return AppColors.sensorMQ4;
       case 'MQ6':        return AppColors.sensorMQ6;
@@ -424,7 +493,7 @@ class _SensorTile extends StatelessWidget {
   }
 
   String get _displayLabel {
-    switch (sensor.sensorType.toUpperCase()) {
+    switch (widget.sensor.sensorType.toUpperCase()) {
       case 'MQ2':        return 'MQ-2';
       case 'MQ4':        return 'MQ-4';
       case 'MQ6':        return 'MQ-6';
@@ -432,12 +501,12 @@ class _SensorTile extends StatelessWidget {
       case 'SHTC3_TEMP': return 'Temp';
       case 'SHTC3_HUM':  return 'Humidity';
       case 'FLAME':      return 'Flame';
-      default:           return sensor.sensorType;
+      default:           return widget.sensor.sensorType;
     }
   }
 
   String get _displayUnit {
-    switch (sensor.sensorType.toUpperCase()) {
+    switch (widget.sensor.sensorType.toUpperCase()) {
       case 'SHTC3_TEMP': return '°C';
       case 'SHTC3_HUM':  return '%';
       case 'FLAME':      return '';
@@ -446,65 +515,128 @@ class _SensorTile extends StatelessWidget {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.3, end: 0.9).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final value = sensor.currentValue;
+    final value = widget.sensor.currentValue;
     final displayValue = value != null ? value.toStringAsFixed(1) : '--';
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _typeColor,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _displayLabel,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                displayValue,
-                style: AppTypography.monoLarge.copyWith(color: _typeColor),
-              ),
-              if (_displayUnit.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 3),
-                  child: Text(
-                    _displayUnit,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.textMuted,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surface1,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Stack(
+          children: [
+            // Circular progress background
+            Positioned(
+              right: -4,
+              bottom: -4,
+              child: AnimatedBuilder(
+                animation: _pulseAnimation,
+                builder: (context, _) {
+                  return Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          _typeColor.withValues(alpha: _pulseAnimation.value * 0.15),
+                          _typeColor.withValues(alpha: 0.0),
+                        ],
+                      ),
                     ),
-                  ),
+                  );
+                },
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    // Status dot with pulse
+                    AnimatedBuilder(
+                      animation: _pulseAnimation,
+                      builder: (context, _) {
+                        return Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _typeColor,
+                            boxShadow: [
+                              BoxShadow(
+                                color: _typeColor.withValues(alpha: _pulseAnimation.value * 0.6),
+                                blurRadius: 7,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _displayLabel,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-            ],
-          ),
-        ],
-      ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      displayValue,
+                      style: AppTypography.monoLarge.copyWith(
+                        color: _typeColor,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (_displayUnit.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 4),
+                        child: Text(
+                          _displayUnit,
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -708,12 +840,19 @@ class _SensorHistoryChartState extends ConsumerState<SensorHistoryChart> {
 
         // Chart Container
         Container(
-          height: 220,
+          height: 240,
           padding: const EdgeInsets.fromLTRB(10, 16, 20, 10),
           decoration: BoxDecoration(
             color: AppColors.surface1,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: historyAsync.when(
             loading: () => const Center(
@@ -1097,21 +1236,36 @@ class _ActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              color.withValues(alpha: 0.1),
+              color.withValues(alpha: 0.04),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
         ),
         child: Column(
           children: [
-            Icon(icon, size: 22, color: color),
-            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 22, color: color),
+            ),
+            const SizedBox(height: 8),
             Text(
               label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: color,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
               ),
             ),
           ],

@@ -5,6 +5,7 @@ abstract final class ApiEndpoints {
 
   // Auth
   static const String login    = '$apiPrefix/auth/login';
+  static const String register = '$apiPrefix/auth/register';
   static const String logout   = '$apiPrefix/auth/logout';
   static const String me       = '$apiPrefix/auth/me';
 
@@ -38,4 +39,8 @@ abstract final class ApiEndpoints {
   static const String ws = '$apiPrefix/dashboard/ws';
   static String get wsUrl =>
       baseUrl.replaceFirst('https://', 'wss://').replaceFirst('http://', 'ws://') + ws;
+
+  // Subscriptions
+  static const String roomSubscriptions = '$apiPrefix/user/room-subscriptions';
+  static const String availableRooms = '$apiPrefix/user/room-subscriptions/available';
 }

@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:agniraksha_mobile/features/dashboard/providers/dashboard_provider.dart';
 import 'package:agniraksha_mobile/features/auth/providers/auth_provider.dart';
+import 'package:agniraksha_mobile/features/subscriptions/providers/subscriptions_provider.dart';
 import 'package:agniraksha_mobile/core/theme/app_colors.dart';
 import 'package:agniraksha_mobile/core/theme/app_typography.dart';
 import 'package:agniraksha_mobile/core/notifications/notification_service.dart';
 import 'package:agniraksha_mobile/core/alarm/alarm_service.dart';
 import 'package:agniraksha_mobile/features/alerts/presentation/fire_alert_overlay.dart';
 import 'package:agniraksha_mobile/features/realtime/providers/realtime_provider.dart';
+import 'package:agniraksha_mobile/core/localization/lang_provider.dart';
+import 'package:agniraksha_mobile/core/localization/app_translations.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -20,17 +24,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize notifications system
     Future.microtask(() {
       ref.read(notificationServiceProvider).initialize();
+      // Pre-load subscriptions so WebSocket filtering works
+      ref.read(subscriptionsProvider.notifier).loadAvailableRooms();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Listen to real-time fire and gas alert stream
+    final user = ref.watch(authProvider).user;
+    final isBasicUser = user?.role == 'user';
+    final subState = ref.watch(subscriptionsProvider);
+    final hasSubscriptions = subState.subscribedRoomIds.isNotEmpty;
+    final lang = ref.watch(langProvider);
+
+    // Listen to filtered real-time fire and gas alert stream
     // Triggers: 1) Loud siren + vibration  2) Full-screen overlay  3) Local notification (fallback)
-    ref.listen<AsyncValue<Map<String, dynamic>>>(realtimeEventsProvider, (previous, next) {
+    ref.listen<AsyncValue<Map<String, dynamic>>>(filteredRealtimeEventsProvider, (previous, next) {
       next.whenData((message) {
         if (message['type'] == 'FIRE_ALERT') {
           final alertData = message['data'] as Map<String, dynamic>?;
@@ -60,14 +71,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     });
 
     final dashboard = ref.watch(dashboardProvider);
-    final user = ref.watch(authProvider).user;
 
     return Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('AgniRakhsa', style: Theme.of(context).textTheme.titleLarge),
+            Text('AgniRakhsa', style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            )),
             if (user != null)
               Text(
                 user.email,
@@ -91,39 +103,56 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         onRefresh: () => ref.read(dashboardProvider.notifier).manualRefresh(),
         child: dashboard.when(
           loading: () => const Center(
-            child: CircularProgressIndicator(),
+            child: CircularProgressIndicator(color: AppColors.brand),
           ),
           error: (e, _) => _ErrorView(
             message: e.toString(),
             onRetry: () => ref.read(dashboardProvider.notifier).manualRefresh(),
           ),
-          data: (data) => ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            children: [
-              // ── System Overview ──
-              _SectionLabel(label: 'SYSTEM OVERVIEW'),
-              const SizedBox(height: 12),
-              _StatsGrid(data: data),
+          data: (data) {
+            // Empty state for basic users with no subscriptions
+            if (isBasicUser && data.totalRooms == 0) {
+              return _NoSubscriptionsView(
+                onManage: () => context.push('/subscriptions'),
+              );
+            }
 
-              const SizedBox(height: 28),
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              children: [
+                // ── Subscription banner for basic users ──
+                if (isBasicUser && !hasSubscriptions) ...[
+                  _SubscriptionBanner(
+                    onTap: () => context.push('/subscriptions'),
+                  ),
+                  const SizedBox(height: 20),
+                ],
 
-              // ── Room Status ──
-              _SectionLabel(label: 'ROOM STATUS'),
-              const SizedBox(height: 12),
-              _RoomStatusBreakdown(counts: data.roomStatusCounts),
-
-              const SizedBox(height: 28),
-
-              // ── Recent Critical Events ──
-              if (data.recentCriticalEvents.isNotEmpty) ...[
-                _SectionLabel(label: 'RECENT EVENTS'),
+                // ── System Overview ──
+                _SectionLabel(label: 'SYSTEM OVERVIEW'),
                 const SizedBox(height: 12),
-                ...data.recentCriticalEvents.map(
-                  (e) => _EventTile(event: e),
-                ),
+                _StatsGrid(data: data),
+
+                const SizedBox(height: 28),
+
+                // ── Room Status ──
+                _SectionLabel(label: 'ROOM STATUS'),
+                const SizedBox(height: 12),
+                _RoomStatusBreakdown(counts: data.roomStatusCounts),
+
+                const SizedBox(height: 28),
+
+                // ── Recent Critical Events ──
+                if (data.recentCriticalEvents.isNotEmpty) ...[
+                  _SectionLabel(label: 'RECENT EVENTS'),
+                  const SizedBox(height: 12),
+                  ...data.recentCriticalEvents.map(
+                    (e) => _EventTile(event: e),
+                  ),
+                ],
               ],
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -160,18 +189,30 @@ class _StatsGrid extends StatelessWidget {
           value: '${data.totalRooms}',
           label: 'Rooms',
           color: AppColors.info,
+          gradientColors: [
+            AppColors.info.withValues(alpha: 0.15),
+            AppColors.info.withValues(alpha: 0.02),
+          ],
         )),
         const SizedBox(width: 10),
         Expanded(child: _StatTile(
           value: '${data.onlineDevices}/${data.totalDevices}',
           label: 'Devices Online',
           color: AppColors.safe,
+          gradientColors: [
+            AppColors.safe.withValues(alpha: 0.15),
+            AppColors.safe.withValues(alpha: 0.02),
+          ],
         )),
         const SizedBox(width: 10),
         Expanded(child: _StatTile(
           value: '${data.activeAlerts}',
           label: 'Active Alerts',
           color: data.activeAlerts > 0 ? AppColors.critical : AppColors.textMuted,
+          gradientColors: [
+            (data.activeAlerts > 0 ? AppColors.critical : AppColors.textMuted).withValues(alpha: 0.12),
+            (data.activeAlerts > 0 ? AppColors.critical : AppColors.textMuted).withValues(alpha: 0.01),
+          ],
         )),
       ],
     );
@@ -182,29 +223,46 @@ class _StatTile extends StatelessWidget {
   final String value;
   final String label;
   final Color color;
-  const _StatTile({required this.value, required this.label, required this.color});
+  final List<Color> gradientColors;
+  const _StatTile({
+    required this.value,
+    required this.label,
+    required this.color,
+    required this.gradientColors,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: gradientColors,
+        ),
+        border: Border.all(
+          color: color.withValues(alpha: 0.25),
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             value,
-            style: AppTypography.monoLarge.copyWith(color: color),
+            style: AppTypography.monoLarge.copyWith(
+              color: color,
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.textMuted,
+              color: AppColors.textSecondary,
             ),
           ),
         ],
@@ -228,11 +286,13 @@ class _RoomStatusBreakdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final total = counts.values.fold(0, (sum, v) => sum + v);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface1,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
@@ -240,22 +300,47 @@ class _RoomStatusBreakdown extends StatelessWidget {
           final meta = _statusMeta[entry.key];
           final color = meta?.color ?? AppColors.textMuted;
           final icon = meta?.icon ?? Icons.circle_outlined;
+          final fraction = total > 0 ? entry.value / total : 0.0;
+
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(
               children: [
                 Icon(icon, size: 16, color: color),
                 const SizedBox(width: 10),
-                Text(
-                  entry.key.toUpperCase(),
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: AppColors.textSecondary,
+                Expanded(
+                  child: Text(
+                    entry.key.toUpperCase(),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                Text(
-                  '${entry.value}',
-                  style: AppTypography.mono.copyWith(color: color),
+                // Progress bar
+                SizedBox(
+                  width: 60,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: fraction,
+                      minHeight: 5,
+                      backgroundColor: AppColors.border,
+                      valueColor: AlwaysStoppedAnimation(color),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 24,
+                  child: Text(
+                    '${entry.value}',
+                    textAlign: TextAlign.right,
+                    style: AppTypography.mono.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -276,46 +361,199 @@ class _EventTile extends StatelessWidget {
     final riskLevel = event['risk_level'] as String? ?? 'unknown';
     final score = (event['fusion_score'] as num?)?.toStringAsFixed(2) ?? '--';
     final isHigh = riskLevel == 'high' || riskLevel == 'critical';
+    final color = isHigh ? AppColors.critical : AppColors.warning;
+    final icon = isHigh ? Icons.crisis_alert_rounded : Icons.warning_amber_rounded;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: (isHigh ? AppColors.critical : AppColors.warning).withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: (isHigh ? AppColors.critical : AppColors.warning).withValues(alpha: 0.2),
-        ),
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
-          Icon(
-            isHigh ? Icons.crisis_alert_rounded : Icons.warning_amber_rounded,
-            size: 18,
-            color: isHigh ? AppColors.critical : AppColors.warning,
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: color),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Risk: ${riskLevel.toUpperCase()}',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: isHigh ? AppColors.critical : AppColors.warning,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      'RISK: ${riskLevel.toUpperCase()}',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'SCORE $score',
+                        style: AppTypography.monoSmall.copyWith(
+                          color: color,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Fusion Score: $score',
-                  style: AppTypography.monoSmall.copyWith(
-                    color: AppColors.textSecondary,
+                if (event['room_name'] != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    event['room_name'] as String,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
+          Icon(Icons.chevron_right_rounded, size: 18, color: color.withValues(alpha: 0.4)),
         ],
+      ),
+    );
+  }
+}
+
+// ── Subscription Banner ───────────────────────────────────
+class _SubscriptionBanner extends StatelessWidget {
+  final VoidCallback onTap;
+  const _SubscriptionBanner({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.brand.withValues(alpha: 0.12),
+              AppColors.info.withValues(alpha: 0.08),
+            ],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.brand.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.brand.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.notifications_active_rounded,
+                  color: AppColors.brand, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Set Up Room Subscriptions',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Choose which rooms you want to monitor',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                size: 20, color: AppColors.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── No Subscriptions Empty State ────────────────────────────
+class _NoSubscriptionsView extends StatelessWidget {
+  final VoidCallback onManage;
+  const _NoSubscriptionsView({required this.onManage});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.brand.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.meeting_room_outlined,
+                size: 36,
+                color: AppColors.brand,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'No Rooms Selected',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Select the rooms you want to monitor to see their status and receive alerts.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: onManage,
+                icon: const Icon(Icons.checklist_rounded, size: 20),
+                label: const Text('Choose Rooms'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
