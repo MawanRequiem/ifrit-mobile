@@ -209,17 +209,28 @@ class FcmService {
   /// Handle notification tap → navigate to relevant screen.
   void _handleNotificationTap(Map<String, dynamic> data) {
     if (data['type'] == 'FIRE_ALERT') {
-      final roomId = data['room_id'] as String?;
+      final severity = data['severity'] as String? ?? 'critical';
       
       // Navigate using GoRouter directly through Riverpod to avoid null context on startup
       _ref.read(routerProvider).go('/alerts');
       
-      // Show overlay popup
+      // Start the alarm tone and vibration
+      _ref.read(alarmServiceProvider).startAlarm(severity: severity);
+      
+      // Show overlay popup robustly (wait for context to be available if app just booted)
+      _showOverlayWhenContextReady(data);
+    }
+  }
+
+  void _showOverlayWhenContextReady(Map<String, dynamic> data, {int attempts = 0}) {
+    if (attempts > 20) return; // Stop after 10 seconds to avoid infinite loop
+    
+    final context = rootNavigatorKey.currentContext;
+    if (context != null) {
+      FireAlertOverlay.show(context, data);
+    } else {
       Future.delayed(const Duration(milliseconds: 500), () {
-        final context = rootNavigatorKey.currentContext;
-        if (context != null) {
-          FireAlertOverlay.show(context, data);
-        }
+        _showOverlayWhenContextReady(data, attempts: attempts + 1);
       });
     }
   }
