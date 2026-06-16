@@ -7,6 +7,7 @@ import 'package:agniraksha_mobile/core/theme/app_typography.dart';
 import 'dart:convert';
 import 'package:go_router/go_router.dart';
 import 'package:agniraksha_mobile/core/localization/lang_provider.dart';
+import 'package:agniraksha_mobile/core/localization/app_translations.dart';
 
 /// Bottom sheet showing full details of an alert with action buttons.
 class AlertDetailSheet extends ConsumerStatefulWidget {
@@ -102,6 +103,7 @@ class _AlertDetailSheetState extends ConsumerState<AlertDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = ref.watch(langProvider);
     final isCritical = alert.severity == 'critical' || alert.severity == 'high';
 
     return DraggableScrollableSheet(
@@ -155,7 +157,7 @@ class _AlertDetailSheetState extends ConsumerState<AlertDetailSheet> {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            (alert.severity ?? 'info').toUpperCase(),
+                            AppTranslations.severity(alert.severity, lang),
                             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: _severityColor,
                               fontWeight: FontWeight.w800,
@@ -165,7 +167,7 @@ class _AlertDetailSheetState extends ConsumerState<AlertDetailSheet> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          alert.alertType ?? 'Alert',
+                          alert.roomName ?? alert.alertType ?? 'Alert',
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.w700,
@@ -190,7 +192,7 @@ class _AlertDetailSheetState extends ConsumerState<AlertDetailSheet> {
                           const Icon(Icons.check_circle_rounded, size: 14, color: AppColors.safe),
                           const SizedBox(width: 4),
                           Text(
-                            'SAFE',
+                            AppTranslations.tr('badge_safe', lang),
                             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: AppColors.safe,
                               fontWeight: FontWeight.w700,
@@ -209,7 +211,6 @@ class _AlertDetailSheetState extends ConsumerState<AlertDetailSheet> {
               if (alert.message != null && alert.message!.isNotEmpty)
                 Builder(
                   builder: (context) {
-                    final lang = ref.watch(langProvider);
                     String displayText = alert.message!;
                     
                     // Try parsing as JSON from the backend
@@ -251,21 +252,62 @@ class _AlertDetailSheetState extends ConsumerState<AlertDetailSheet> {
 
               const SizedBox(height: 16),
 
-              // ── Image ──
-              if (alert.imageUrl != null && alert.imageUrl!.isNotEmpty)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  width: double.infinity,
-                  height: 200,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
-                    image: DecorationImage(
-                      image: NetworkImage(alert.imageUrl!),
+              // ── Detection Image ──
+              if (alert.imageUrl != null && alert.imageUrl!.isNotEmpty) ...[
+                Text(
+                  AppTranslations.tr('image_capture', lang),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image.network(
+                      alert.imageUrl!,
                       fit: BoxFit.cover,
+                      loadingBuilder: (ctx, child, progress) {
+                        if (progress == null) return child;
+                        return Container(
+                          color: AppColors.surface2,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value: progress.expectedTotalBytes != null
+                                  ? progress.cumulativeBytesLoaded /
+                                      progress.expectedTotalBytes!
+                                  : null,
+                              color: AppColors.brand,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (ctx, err, st) => Container(
+                        color: AppColors.surface2,
+                        child: const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.broken_image_outlined,
+                                  size: 32, color: AppColors.textMuted),
+                              SizedBox(height: 8),
+                              Text(
+                                'Image unavailable',
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
+                const SizedBox(height: 16),
+              ],
 
               // ── Details grid ──
               Container(
@@ -278,28 +320,38 @@ class _AlertDetailSheetState extends ConsumerState<AlertDetailSheet> {
                 child: Column(
                   children: [
                     _DetailRow(
-                      label: 'Location',
-                      value: widget.roomName ?? alert.roomId ?? '—',
+                      label: AppTranslations.tr('location', lang),
+                      value: alert.roomName ?? alert.roomId ?? '—',
                       icon: Icons.location_on_outlined,
                     ),
                     const Divider(color: AppColors.border, height: 20),
                     _DetailRow(
-                      label: 'Device ID',
-                      value: alert.deviceId?.substring(0, 8) ?? '—',
+                      label: AppTranslations.tr('alert_type', lang),
+                      value: (alert.alertType ?? '—').toUpperCase(),
+                      icon: Icons.local_fire_department_outlined,
+                    ),
+                    const Divider(color: AppColors.border, height: 20),
+                    _DetailRow(
+                      label: AppTranslations.tr('device_id', lang),
+                      value: alert.deviceId != null && alert.deviceId!.length >= 8
+                          ? alert.deviceId!.substring(0, 8)
+                          : (alert.deviceId ?? '—'),
                       icon: Icons.developer_board_outlined,
                       isMono: true,
                     ),
                     const Divider(color: AppColors.border, height: 20),
                     _DetailRow(
-                      label: 'Timestamp',
+                      label: AppTranslations.tr('timestamp', lang),
                       value: _formatTimestamp(alert.createdAt),
                       icon: Icons.access_time_rounded,
                       isMono: true,
                     ),
                     const Divider(color: AppColors.border, height: 20),
                     _DetailRow(
-                      label: 'Status',
-                      value: alert.isAcknowledged ? 'Acknowledged' : 'Active — Needs Attention',
+                      label: AppTranslations.tr('status', lang),
+                      value: alert.isAcknowledged
+                          ? AppTranslations.tr('status_acknowledged', lang)
+                          : AppTranslations.tr('status_active', lang),
                       icon: alert.isAcknowledged
                           ? Icons.verified_rounded
                           : Icons.pending_outlined,
@@ -329,7 +381,9 @@ class _AlertDetailSheetState extends ConsumerState<AlertDetailSheet> {
                           )
                         : const Icon(Icons.check_circle_outline_rounded, size: 20),
                     label: Text(
-                      _isAcknowledging ? 'ACKNOWLEDGING...' : 'ACKNOWLEDGE & MARK SAFE',
+                      _isAcknowledging
+                          ? AppTranslations.tr('btn_acknowledging', lang)
+                          : AppTranslations.tr('btn_acknowledge', lang),
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.8,
@@ -354,9 +408,9 @@ class _AlertDetailSheetState extends ConsumerState<AlertDetailSheet> {
                   child: OutlinedButton.icon(
                     onPressed: _handleViewRoom,
                     icon: const Icon(Icons.meeting_room_outlined, size: 18),
-                    label: const Text(
-                      'VIEW ROOM',
-                      style: TextStyle(
+                    label: Text(
+                      AppTranslations.tr('btn_view_room', lang),
+                      style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.5,
                         fontSize: 12,

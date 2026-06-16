@@ -4,6 +4,7 @@ class AlertModel {
   final String? severity;
   final String? message;
   final String? roomId;
+  final String? roomName;
   final String? deviceId;
   final String? imageUrl;
   final bool isAcknowledged;
@@ -17,6 +18,7 @@ class AlertModel {
     this.severity,
     this.message,
     this.roomId,
+    this.roomName,
     this.deviceId,
     this.imageUrl,
     required this.isAcknowledged,
@@ -32,6 +34,7 @@ class AlertModel {
       severity: json['severity'] as String?,
       message: json['message'] as String?,
       roomId: json['room_id'] as String?,
+      roomName: json['room_name'] as String?,
       deviceId: json['device_id'] as String?,
       imageUrl: json['image_url'] as String?,
       isAcknowledged: json['is_acknowledged'] as bool? ?? false,

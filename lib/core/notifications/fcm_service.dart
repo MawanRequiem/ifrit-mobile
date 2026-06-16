@@ -5,9 +5,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:agniraksha_mobile/core/network/api_endpoints.dart';
 import 'package:agniraksha_mobile/features/auth/providers/auth_provider.dart';
 import 'package:agniraksha_mobile/core/notifications/notification_service.dart';
@@ -91,7 +91,7 @@ class FcmService {
       _sendTokenToBackend(token);
     });
 
-    // ── Foreground messages ──
+    // ── Foreground messages — show overlay immediately ──
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
     // ── App opened from terminated via native FCM notification tap ──
@@ -176,7 +176,7 @@ class FcmService {
     }
   }
 
-  /// Handle foreground FCM message — show local notification.
+  /// Handle foreground FCM message — show local notification + alarm + overlay.
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     final data = message.data;
     final notification = message.notification;
@@ -188,14 +188,14 @@ class FcmService {
       final title = notification?.title ?? data['title_$lang'] ?? data['title'] ?? '🚨 Fire Alert';
       final body = notification?.body ?? data['body_$lang'] ?? data['body'] ?? 'Fire detected';
 
-      // Trigger the alarm cascade (siren + overlay) if app is visible
+      // Start alarm siren + vibration (foreground app IS running)
       try {
         _ref.read(alarmServiceProvider).startAlarm(
           severity: data['severity'] ?? 'high',
         );
       } catch (_) {}
 
-      // Also show local notification
+      // Also show local notification so user can tap if they minimize
       try {
         _ref.read(notificationServiceProvider).showFireAlert(
           title: title,
@@ -203,48 +203,78 @@ class FcmService {
           payload: jsonEncode(data),
         );
       } catch (_) {}
+
+      // Show the full-screen overlay immediately since the app IS in foreground
+      _showOverlayWhenContextReady(data);
     }
   }
 
-  /// Handle notification tap → navigate to relevant screen.
+  /// Handle notification tap → navigate to relevant screen and show overlay.
   void _handleNotificationTap(Map<String, dynamic> data) {
     if (data['type'] == 'FIRE_ALERT') {
       final severity = data['severity'] as String? ?? 'critical';
-      
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Navigate using GoRouter directly through Riverpod to avoid null context on startup
-        _ref.read(routerProvider).go('/alerts');
-        
-        // Start the alarm tone and vibration
-        _ref.read(alarmServiceProvider).startAlarm(severity: severity);
+
+      // Navigate and start alarm on next frame (after app is fully ready)
+      _runWhenFrameReady(() {
+        try {
+          _ref.read(routerProvider).go('/alerts');
+        } catch (_) {}
+        try {
+          _ref.read(alarmServiceProvider).startAlarm(severity: severity);
+        } catch (_) {}
       });
-      
+
       // Show overlay popup robustly (wait for context to be available if app just booted)
       _showOverlayWhenContextReady(data);
     }
   }
 
+  /// Show the fire alert overlay once the navigator context is ready.
+  /// Retries every 300ms for up to 15 seconds before giving up.
   void _showOverlayWhenContextReady(Map<String, dynamic> data, {int attempts = 0}) {
-    if (attempts > 20) return; // Stop after 10 seconds to avoid infinite loop
-    
+    const maxAttempts = 50; // 50 × 300ms = 15 seconds
+    if (attempts > maxAttempts) {
+      debugPrint('[FCM] Gave up waiting for navigator context after $maxAttempts attempts');
+      return;
+    }
+
     final navigator = rootNavigatorKey.currentState;
     if (navigator != null && navigator.mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Use navigator.push instead of FireAlertOverlay.show(context) 
-        // to avoid Navigator.of(context) failing when context is the Navigator itself.
-        navigator.push(
-          DialogRoute(
-            context: rootNavigatorKey.currentContext!,
-            barrierDismissible: false,
-            barrierColor: Colors.black87,
-            builder: (_) => FireAlertOverlay(alertData: data),
-          ),
-        );
+      // Schedule after current frame so we never interfere with an in-progress build
+      _runWhenFrameReady(() {
+        try {
+          navigator.push(
+            DialogRoute(
+              context: rootNavigatorKey.currentContext!,
+              barrierDismissible: false,
+              barrierColor: Colors.black87,
+              builder: (_) => FireAlertOverlay(alertData: data),
+            ),
+          );
+          debugPrint('[FCM] 🔴 FireAlertOverlay mounted successfully');
+        } catch (e) {
+          debugPrint('[FCM] FireAlertOverlay push failed: $e — retrying...');
+          Future.delayed(const Duration(milliseconds: 300), () {
+            _showOverlayWhenContextReady(data, attempts: attempts + 1);
+          });
+        }
       });
     } else {
-      Future.delayed(const Duration(milliseconds: 500), () {
+      debugPrint('[FCM] Navigator not ready (attempt $attempts), retrying in 300ms...');
+      Future.delayed(const Duration(milliseconds: 300), () {
         _showOverlayWhenContextReady(data, attempts: attempts + 1);
       });
+    }
+  }
+
+  /// Execute a callback after the current frame (or immediately if scheduler is idle).
+  void _runWhenFrameReady(VoidCallback callback) {
+    final scheduler = SchedulerBinding.instance;
+    if (scheduler.schedulerPhase == SchedulerPhase.idle ||
+        scheduler.schedulerPhase == SchedulerPhase.postFrameCallbacks) {
+      callback();
+    } else {
+      scheduler.addPostFrameCallback((_) => callback());
     }
   }
 }

@@ -61,20 +61,20 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
             child: Row(
               children: [
                 _FilterChip(
-                  label: 'All',
+                  label: AppTranslations.tr('filter_all', lang),
                   isActive: alertsState.severityFilter == null,
                   onTap: () => ref.read(alertsProvider.notifier).setSeverityFilter(null),
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
-                  label: 'Warning',
+                  label: AppTranslations.tr('filter_warning', lang),
                   isActive: alertsState.severityFilter == 'warning',
                   color: AppColors.of(context).warning,
                   onTap: () => ref.read(alertsProvider.notifier).setSeverityFilter('warning'),
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
-                  label: 'Critical',
+                  label: AppTranslations.tr('filter_critical', lang),
                   isActive: alertsState.severityFilter == 'critical',
                   color: AppColors.of(context).critical,
                   onTap: () => ref.read(alertsProvider.notifier).setSeverityFilter('critical'),
@@ -92,7 +92,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                hintText: 'Search alerts...',
+                hintText: AppTranslations.tr('search_alerts', lang),
                 filled: true,
                 fillColor: AppColors.of(context).surface2,
                 border: OutlineInputBorder(
@@ -139,6 +139,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
   Widget _buildEmptyState(BuildContext context) {
     final user = ref.watch(authProvider).user;
     final isBasicUser = user?.role == 'user';
+    final lang = ref.watch(langProvider);
 
     if (isBasicUser) {
       return ListView(
@@ -151,17 +152,18 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                     size: 48, color: AppColors.textMuted),
                 const SizedBox(height: 16),
                 Text(
-                  'No alerts',
+                  AppTranslations.tr('no_alerts_sub', lang),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Subscribe to rooms to receive alerts.',
+                  AppTranslations.tr('subscribe_rooms', lang),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.textMuted,
                   ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -180,14 +182,14 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                   size: 48, color: AppColors.safe),
               const SizedBox(height: 16),
               Text(
-                'No active alerts',
+                AppTranslations.tr('no_alerts', lang),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
-                'All systems nominal',
+                AppTranslations.tr('all_nominal', lang),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.textMuted,
                 ),
@@ -208,6 +210,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
             return message.contains(_searchQuery) || alertType.contains(_searchQuery);
           }).toList();
 
+    final lang = ref.watch(langProvider);
     if (filtered.isEmpty && _searchQuery.isNotEmpty) {
       return ListView(
         children: [
@@ -218,14 +221,14 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                 const Icon(Icons.search_rounded, size: 48, color: AppColors.textMuted),
                 const SizedBox(height: 16),
                 Text(
-                  'No alerts found',
+                  AppTranslations.tr('no_alerts_found', lang),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Try a different search term.',
+                  AppTranslations.tr('try_different', lang),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.textMuted,
                   ),
@@ -244,6 +247,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
       itemBuilder: (context, index) {
         return _AlertTile(
           alert: filtered[index],
+          lang: lang,
           onTap: () {
             AlertDetailSheet.show(
               context,
@@ -255,11 +259,11 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
             ref.read(alertsProvider.notifier).acknowledge(alert.id);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text('Alert acknowledged'),
+                content: Text(AppTranslations.tr('btn_acknowledge', lang)),
                 backgroundColor: AppColors.safe,
                 behavior: SnackBarBehavior.floating,
                 action: SnackBarAction(
-                  label: 'VIEW',
+                  label: AppTranslations.tr('btn_view_room', lang),
                   textColor: Colors.white,
                   onPressed: () {
                     AlertDetailSheet.show(
@@ -322,10 +326,12 @@ class _AlertTile extends StatelessWidget {
   final AlertModel alert;
   final VoidCallback onTap;
   final VoidCallback onAcknowledge;
+  final String lang;
   const _AlertTile({
     required this.alert,
     required this.onTap,
     required this.onAcknowledge,
+    required this.lang,
   });
 
   Color _severityColor(BuildContext context) {
@@ -377,7 +383,7 @@ class _AlertTile extends StatelessWidget {
             Icon(Icons.check_rounded, color: AppColors.of(context).safe, size: 20),
             const SizedBox(width: 6),
             Text(
-              'ACKNOWLEDGE',
+              AppTranslations.tr('swipe_acknowledge', lang),
               style: TextStyle(
                 color: AppColors.of(context).safe,
                 fontWeight: FontWeight.w700,
@@ -456,7 +462,7 @@ class _AlertTile extends StatelessWidget {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              (alert.severity ?? 'info').toUpperCase(),
+                              AppTranslations.severity(alert.severity, lang),
                               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                 color: sevColor,
                                 fontWeight: FontWeight.w700,
@@ -473,7 +479,7 @@ class _AlertTile extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                'NEW',
+                                AppTranslations.tr('badge_new', lang),
                                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                   color: sevColor,
                                   fontWeight: FontWeight.w800,
@@ -527,7 +533,7 @@ class _AlertTile extends StatelessWidget {
       final now = DateTime.now();
       final diff = now.difference(dt);
 
-      if (diff.inMinutes < 1) return 'just now';
+      if (diff.inMinutes < 1) return AppTranslations.tr('just_now', lang);
       if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
       if (diff.inHours < 24) return '${diff.inHours}h ago';
       return '${diff.inDays}d ago';
