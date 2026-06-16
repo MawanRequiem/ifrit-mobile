@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:agniraksha_mobile/features/auth/providers/auth_provider.dart';
 import 'package:agniraksha_mobile/core/theme/app_colors.dart';
 import 'package:agniraksha_mobile/core/theme/app_typography.dart';
@@ -97,10 +98,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ),
                           ],
                         ),
-                        child: const Icon(
-                          Icons.local_fire_department_rounded,
-                          color: AppColors.brand,
-                          size: 36,
+                        child: SvgPicture.asset(
+                          'assets/images/logo.svg',
+                          width: 48,
+                          height: 48,
                         ),
                       ),
                       const SizedBox(height: 28),

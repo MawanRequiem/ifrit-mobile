@@ -16,10 +16,13 @@ import 'package:agniraksha_mobile/core/theme/theme_provider.dart';
 import 'package:agniraksha_mobile/core/localization/lang_provider.dart';
 import 'package:agniraksha_mobile/core/localization/app_translations.dart';
 
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authProvider);
 
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/dashboard',
     redirect: (context, state) {
       final isLoggedIn = auth.status == AuthStatus.authenticated;

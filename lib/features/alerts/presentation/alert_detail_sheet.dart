@@ -4,7 +4,9 @@ import 'package:agniraksha_mobile/features/alerts/domain/alert_model.dart';
 import 'package:agniraksha_mobile/features/alerts/providers/alerts_provider.dart';
 import 'package:agniraksha_mobile/core/theme/app_colors.dart';
 import 'package:agniraksha_mobile/core/theme/app_typography.dart';
+import 'dart:convert';
 import 'package:go_router/go_router.dart';
+import 'package:agniraksha_mobile/core/localization/lang_provider.dart';
 
 /// Bottom sheet showing full details of an alert with action buttons.
 class AlertDetailSheet extends ConsumerStatefulWidget {
@@ -205,30 +207,65 @@ class _AlertDetailSheetState extends ConsumerState<AlertDetailSheet> {
 
               // ── Message ──
               if (alert.message != null && alert.message!.isNotEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: isCritical
-                        ? AppColors.critical.withValues(alpha: 0.05)
-                        : AppColors.surface2,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isCritical
-                          ? AppColors.critical.withValues(alpha: 0.15)
-                          : AppColors.border,
-                    ),
-                  ),
-                  child: Text(
-                    alert.message!,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textPrimary,
-                      height: 1.5,
-                    ),
-                  ),
+                Builder(
+                  builder: (context) {
+                    final lang = ref.watch(langProvider);
+                    String displayText = alert.message!;
+                    
+                    // Try parsing as JSON from the backend
+                    try {
+                      final parsed = jsonDecode(alert.message!);
+                      final explanation = parsed['explanation_$lang'];
+                      final messageStr = parsed[lang];
+                      if (explanation != null && explanation.toString().isNotEmpty) {
+                        displayText = explanation;
+                      } else if (messageStr != null) {
+                        displayText = messageStr;
+                      }
+                    } catch (_) {}
+
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: isCritical
+                            ? AppColors.critical.withValues(alpha: 0.05)
+                            : AppColors.surface2,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isCritical
+                              ? AppColors.critical.withValues(alpha: 0.15)
+                              : AppColors.border,
+                        ),
+                      ),
+                      child: Text(
+                        displayText,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textPrimary,
+                          height: 1.5,
+                        ),
+                      ),
+                    );
+                  }
                 ),
 
               const SizedBox(height: 16),
+
+              // ── Image ──
+              if (alert.imageUrl != null && alert.imageUrl!.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  width: double.infinity,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                    image: DecorationImage(
+                      image: NetworkImage(alert.imageUrl!),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
 
               // ── Details grid ──
               Container(
