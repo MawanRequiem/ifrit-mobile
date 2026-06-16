@@ -64,6 +64,18 @@ class FcmService {
 
     await Firebase.initializeApp();
 
+    // Initialize local notifications with tap handler
+    await _ref.read(notificationServiceProvider).initialize(
+      onNotificationTap: (NotificationResponse response) {
+        if (response.payload != null) {
+          try {
+            final data = jsonDecode(response.payload!);
+            _handleNotificationTap(data);
+          } catch (_) {}
+        }
+      },
+    );
+
     // Request notification permission (iOS)
     await _messaging.requestPermission(
       alert: true,

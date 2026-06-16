@@ -10,7 +10,9 @@ class NotificationService {
   bool _isInitialized = false;
 
   /// Initializes the notification service and sets up native channels.
-  Future<void> initialize() async {
+  Future<void> initialize({
+    void Function(NotificationResponse)? onNotificationTap,
+  }) async {
     if (_isInitialized) return;
 
     const AndroidInitializationSettings initializationSettingsAndroid =
@@ -30,6 +32,8 @@ class NotificationService {
 
     await _localNotifications.initialize(
       initializationSettings,
+      onDidReceiveNotificationResponse: onNotificationTap,
+      onDidReceiveBackgroundNotificationResponse: onNotificationTap,
     );
 
     // Request permissions on Android 13+ if supported
