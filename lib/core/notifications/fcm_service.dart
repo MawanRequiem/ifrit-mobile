@@ -211,11 +211,13 @@ class FcmService {
     if (data['type'] == 'FIRE_ALERT') {
       final severity = data['severity'] as String? ?? 'critical';
       
-      // Navigate using GoRouter directly through Riverpod to avoid null context on startup
-      _ref.read(routerProvider).go('/alerts');
-      
-      // Start the alarm tone and vibration
-      _ref.read(alarmServiceProvider).startAlarm(severity: severity);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Navigate using GoRouter directly through Riverpod to avoid null context on startup
+        _ref.read(routerProvider).go('/alerts');
+        
+        // Start the alarm tone and vibration
+        _ref.read(alarmServiceProvider).startAlarm(severity: severity);
+      });
       
       // Show overlay popup robustly (wait for context to be available if app just booted)
       _showOverlayWhenContextReady(data);
@@ -226,8 +228,10 @@ class FcmService {
     if (attempts > 20) return; // Stop after 10 seconds to avoid infinite loop
     
     final context = rootNavigatorKey.currentContext;
-    if (context != null) {
-      FireAlertOverlay.show(context, data);
+    if (context != null && context.mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        FireAlertOverlay.show(context, data);
+      });
     } else {
       Future.delayed(const Duration(milliseconds: 500), () {
         _showOverlayWhenContextReady(data, attempts: attempts + 1);
