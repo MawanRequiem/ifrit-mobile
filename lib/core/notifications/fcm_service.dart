@@ -227,10 +227,19 @@ class FcmService {
   void _showOverlayWhenContextReady(Map<String, dynamic> data, {int attempts = 0}) {
     if (attempts > 20) return; // Stop after 10 seconds to avoid infinite loop
     
-    final context = rootNavigatorKey.currentContext;
-    if (context != null && context.mounted) {
+    final navigator = rootNavigatorKey.currentState;
+    if (navigator != null && navigator.mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        FireAlertOverlay.show(context, data);
+        // Use navigator.push instead of FireAlertOverlay.show(context) 
+        // to avoid Navigator.of(context) failing when context is the Navigator itself.
+        navigator.push(
+          DialogRoute(
+            context: rootNavigatorKey.currentContext!,
+            barrierDismissible: false,
+            barrierColor: Colors.black87,
+            builder: (_) => FireAlertOverlay(alertData: data),
+          ),
+        );
       });
     } else {
       Future.delayed(const Duration(milliseconds: 500), () {
