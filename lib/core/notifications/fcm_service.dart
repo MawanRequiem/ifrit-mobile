@@ -13,6 +13,7 @@ import 'package:agniraksha_mobile/features/auth/providers/auth_provider.dart';
 import 'package:agniraksha_mobile/core/notifications/notification_service.dart';
 import 'package:agniraksha_mobile/core/alarm/alarm_service.dart';
 import 'package:agniraksha_mobile/core/router/app_router.dart';
+import 'package:agniraksha_mobile/features/alerts/presentation/fire_alert_overlay.dart';
 
 /// Firebase Cloud Messaging service that handles push notifications
 /// in all app states: foreground, background, and terminated.
@@ -186,10 +187,17 @@ class FcmService {
   void _handleNotificationTap(Map<String, dynamic> data) {
     if (data['type'] == 'FIRE_ALERT') {
       final roomId = data['room_id'] as String?;
-      if (roomId != null) {
-        // Navigate using GoRouter directly through Riverpod to avoid null context on startup
-        _ref.read(routerProvider).push('/rooms/$roomId');
-      }
+      
+      // Navigate using GoRouter directly through Riverpod to avoid null context on startup
+      _ref.read(routerProvider).go('/alerts');
+      
+      // Show overlay popup
+      Future.delayed(const Duration(milliseconds: 500), () {
+        final context = rootNavigatorKey.currentContext;
+        if (context != null) {
+          FireAlertOverlay.show(context, data);
+        }
+      });
     }
   }
 }

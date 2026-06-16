@@ -5,6 +5,7 @@ import 'package:agniraksha_mobile/core/theme/app_colors.dart';
 import 'package:agniraksha_mobile/core/theme/app_typography.dart';
 import 'package:agniraksha_mobile/features/alerts/providers/alerts_provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 /// Full-screen fire alert overlay that demands user interaction.
 /// Cannot be dismissed with back button — must tap Acknowledge or View Room.
@@ -268,12 +269,19 @@ class _FireAlertOverlayState extends ConsumerState<FireAlertOverlay>
                           borderRadius: BorderRadius.circular(10),
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxHeight: 160),
-                            child: Image.network(
-                              _imageUrl!,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              errorBuilder: (ctx, err, st) => const SizedBox.shrink(),
-                            ),
+                            child: _imageUrl!.toLowerCase().endsWith('.svg')
+                                ? SvgPicture.network(
+                                    _imageUrl!,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    placeholderBuilder: (ctx) => const Center(child: CircularProgressIndicator()),
+                                  )
+                                : Image.network(
+                                    _imageUrl!,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    errorBuilder: (ctx, err, st) => const SizedBox.shrink(),
+                                  ),
                           ),
                         ),
                       ],
