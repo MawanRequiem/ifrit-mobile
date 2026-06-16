@@ -52,6 +52,11 @@ class NotificationService {
     _isInitialized = true;
   }
 
+  /// Get details if app was launched via notification
+  Future<NotificationAppLaunchDetails?> getLaunchDetails() async {
+    return await _localNotifications.getNotificationAppLaunchDetails();
+  }
+
   /// Displays an instant alert notification for fire and gas warnings.
   Future<void> showFireAlert({
     required String title,

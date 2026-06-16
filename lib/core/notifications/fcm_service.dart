@@ -94,10 +94,21 @@ class FcmService {
     // ── Foreground messages ──
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
-    // ── App opened from terminated via notification tap ──
+    // ── App opened from terminated via native FCM notification tap ──
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
       _handleNotificationTap(initialMessage.data);
+    }
+
+    // ── App opened from terminated via local notification (e.g. fullScreenIntent) ──
+    final launchDetails = await _ref.read(notificationServiceProvider).getLaunchDetails();
+    if (launchDetails != null && 
+        launchDetails.didNotificationLaunchApp && 
+        launchDetails.notificationResponse?.payload != null) {
+      try {
+        final data = jsonDecode(launchDetails.notificationResponse!.payload!);
+        _handleNotificationTap(data);
+      } catch (_) {}
     }
 
     // ── App in background → user taps notification ──
